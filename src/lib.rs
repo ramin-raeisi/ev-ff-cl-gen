@@ -5,6 +5,7 @@ use ff::PrimeField;
 use itertools::*;
 use num_bigint::BigUint;
 
+static NVIDIA_SRC: &str = include_str!("cl/nvidia.cl");
 static COMMON_SRC: &str = include_str!("cl/common.cl");
 static FIELD_SRC: &str = include_str!("cl/field.cl");
 
@@ -177,6 +178,13 @@ where
     .replace("FIELD", name)
 }
 
+/// Generates shared definitions, must be included _before_ `field` sources.
+pub fn shared() -> String {
+    join(&[
+        NVIDIA_SRC.to_string(),
+    ], "\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,11 +208,13 @@ mod tests {
         static ref PROQUE: ProQue = {
             static TEST_SRC: &str = include_str!("cl/test.cl");
             let src = format!(
-                "{}\n{}\n{}",
+                "{}\n{}\n{}\n{}",
+                shared(),
                 field::<Fr, Limb32>("Fr32"),
                 field::<Fr, Limb64>("Fr64"),
                 TEST_SRC
             );
+            println!("{}", src);
             ProQue::builder().src(src).dims(1).build().unwrap()
         };
     }

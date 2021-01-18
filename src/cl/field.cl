@@ -68,8 +68,204 @@ FIELD FIELD_add(FIELD a, FIELD b) {
   return res;
 }
 
-// Modular multiplication
+
+#ifdef NVIDIA
+
+void FIELD_reduce(uint32_t accLow[FIELD_LIMBS], uint32_t np0, uint32_t fq[FIELD_LIMBS]) {{
+  // accLow is an IN and OUT vector
+  // count must be even
+  const uint32_t count = FIELD_LIMBS;
+  uint32_t accHigh[FIELD_LIMBS];
+  uint32_t bucket=0, lowCarry=0, highCarry=0, q;
+  int32_t  i, j;
+
+  #pragma unroll
+  for(i=0;i<count;i++)
+    accHigh[i]=0;
+
+  // bucket is used so we don't have to push a carry all the way down the line
+
+  #pragma unroll
+  for(j=0;j<count;j++) {{       // main iteration
+    if(j%2==0) {{
+      add_cc(bucket, 0xFFFFFFFF);
+      accLow[0]=addc_cc(accLow[0], accHigh[1]);
+      bucket=addc(0, 0);
+
+      q=accLow[0]*np0;
+
+      chain_t chain1;
+      chain_init(&chain1);
+
+      #pragma unroll
+      for(i=0;i<count;i+=2) {{
+        accLow[i]=chain_madlo(&chain1, q, fq[i], accLow[i]);
+        accLow[i+1]=chain_madhi(&chain1, q, fq[i], accLow[i+1]);
+      }}
+      lowCarry=chain_add(&chain1, 0, 0);
+
+      chain_t chain2;
+      chain_init(&chain2);
+      for(i=0;i<count-2;i+=2) {{
+        accHigh[i]=chain_madlo(&chain2, q, fq[i+1], accHigh[i+2]);    // note the shift down
+        accHigh[i+1]=chain_madhi(&chain2, q, fq[i+1], accHigh[i+3]);
+      }}
+      accHigh[i]=chain_madlo(&chain2, q, fq[i+1], highCarry);
+      accHigh[i+1]=chain_madhi(&chain2, q, fq[i+1], 0);
+    }}
+    else {{
+      add_cc(bucket, 0xFFFFFFFF);
+      accHigh[0]=addc_cc(accHigh[0], accLow[1]);
+      bucket=addc(0, 0);
+
+      q=accHigh[0]*np0;
+
+      chain_t chain3;
+      chain_init(&chain3);
+      #pragma unroll
+      for(i=0;i<count;i+=2) {{
+        accHigh[i]=chain_madlo(&chain3, q, fq[i], accHigh[i]);
+        accHigh[i+1]=chain_madhi(&chain3, q, fq[i], accHigh[i+1]);
+      }}
+      highCarry=chain_add(&chain3, 0, 0);
+
+      chain_t chain4;
+      chain_init(&chain4);
+      for(i=0;i<count-2;i+=2) {{
+        accLow[i]=chain_madlo(&chain4, q, fq[i+1], accLow[i+2]);    // note the shift down
+        accLow[i+1]=chain_madhi(&chain4, q, fq[i+1], accLow[i+3]);
+      }}
+      accLow[i]=chain_madlo(&chain4, q, fq[i+1], lowCarry);
+      accLow[i+1]=chain_madhi(&chain4, q, fq[i+1], 0);
+    }}
+  }}
+
+  // at this point, accHigh needs to be shifted back a word and added to accLow
+  // we'll use one other trick.  Bucket is either 0 or 1 at this point, so we
+  // can just push it into the carry chain.
+
+  chain_t chain5;
+  chain_init(&chain5);
+  chain_add(&chain5, bucket, 0xFFFFFFFF);    // push the carry into the chain
+  #pragma unroll
+  for(i=0;i<count-1;i++)
+    accLow[i]=chain_add(&chain5, accLow[i], accHigh[i+1]);
+  accLow[i]=chain_add(&chain5, accLow[i], highCarry);
+}}
+
+// Requirement: yLimbs >= xLimbs
+inline
+void FIELD_mult_v1(uint32_t *x, uint32_t *y, uint32_t *xy) {{
+  const uint32_t xLimbs  = FIELD_LIMBS;
+  const uint32_t yLimbs  = FIELD_LIMBS;
+  const uint32_t xyLimbs = FIELD_LIMBS * 2;
+  uint32_t temp[FIELD_LIMBS * 2];
+  uint32_t carry = 0;
+
+  #pragma unroll
+  for (int32_t i = 0; i < xyLimbs; i++) {{
+    temp[i] = 0;
+  }}
+  
+  #pragma unroll
+  for (int32_t i = 0; i < xLimbs; i++) {{
+    chain_t chain1;
+    chain_init(&chain1);
+    #pragma unroll
+    for (int32_t j = 0; j < yLimbs; j++) {{
+      if ((i + j) % 2 == 1) {{
+        temp[i + j - 1] = chain_madlo(&chain1, x[i], y[j], temp[i + j - 1]);
+        temp[i + j]     = chain_madhi(&chain1, x[i], y[j], temp[i + j]);
+      }}      
+    }}
+    if (i % 2 == 1) {{
+      temp[i + yLimbs - 1] = chain_add(&chain1, 0, 0);
+    }}
+  }}
+
+  #pragma unroll
+  for (int32_t i = xyLimbs - 1; i > 0; i--) {{
+    temp[i] = temp[i - 1];
+  }}
+  temp[0] = 0;
+  
+  #pragma unroll
+  for (int32_t i = 0; i < xLimbs; i++) {{
+    chain_t chain2;
+    chain_init(&chain2);
+    
+    #pragma unroll
+    for (int32_t j = 0; j < yLimbs; j++) {{
+      if ((i + j) % 2 == 0) {{
+        temp[i + j]     = chain_madlo(&chain2, x[i], y[j], temp[i + j]);
+        temp[i + j + 1] = chain_madhi(&chain2, x[i], y[j], temp[i + j + 1]);
+      }}  
+    }}
+    if ((i + yLimbs) % 2 == 0 && i != yLimbs - 1) {{
+      temp[i + yLimbs]     = chain_add(&chain2, temp[i + yLimbs], carry);
+      temp[i + yLimbs + 1] = chain_add(&chain2, temp[i + yLimbs + 1], 0);
+      carry = chain_add(&chain2, 0, 0);
+    }}
+    if ((i + yLimbs) % 2 == 1 && i != yLimbs - 1) {{
+      carry = chain_add(&chain2, carry, 0);
+    }}
+  }}
+
+  #pragma unroll
+  for(int32_t i = 0; i < xyLimbs; i++) {{
+    xy[i] = temp[i];
+  }}
+}}
+
+FIELD FIELD_mul_nvidia(FIELD a, FIELD b) {{
+  // Perform full multiply
+  // TODO: should not be +1, then addition below should stop one word earlier!
+  limb ab[2 * FIELD_LIMBS + 1];
+  FIELD_mult_v1(a.val, b.val, ab);
+
+  uint32_t io[FIELD_LIMBS];
+  #pragma unroll
+  for(int i=0;i<FIELD_LIMBS;i++) {{
+    io[i]=ab[i];
+  }}
+  FIELD_reduce(io, FIELD_INV, FIELD_P.val);
+
+  // Add io to the upper words of ab
+  ab[FIELD_LIMBS] = add_cc(ab[FIELD_LIMBS], io[0]);
+  int j;
+  #pragma unroll
+  for (j = 1; j < FIELD_LIMBS; j++) {{
+    ab[j + FIELD_LIMBS] = addc_cc(ab[j + FIELD_LIMBS], io[j]);
+  }}
+  ab[2 * FIELD_LIMBS] = addc(ab[2 * FIELD_LIMBS], io[FIELD_LIMBS]);
+
+  FIELD r;
+  #pragma unroll
+  for (int i = 0; i < FIELD_LIMBS; i++) {{
+    r.val[i] = ab[i + FIELD_LIMBS];
+  }}
+
+  if (FIELD_gte(r, FIELD_P)) {{
+    r = FIELD_sub_(r, FIELD_P);
+  }}
+
+  return r;
+}}
+
+#endif
+
+#ifdef NVIDIA
+FIELD FIELD_mul(FIELD a, FIELD b) {{
+  return FIELD_mul_nvidia(a, b);
+}}
+#elif
 FIELD FIELD_mul(FIELD a, FIELD b) {
+  return FIELD_mul_default(a, b);
+}
+#endif
+
+// Modular multiplication
+FIELD FIELD_mul_default(FIELD a, FIELD b) {
   /* CIOS Montgomery multiplication, inspired from Tolga Acar's thesis:
    * https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
    * Learn more:
