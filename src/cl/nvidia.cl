@@ -7,6 +7,18 @@
 
 #ifdef NVIDIA
 
+// Code based on the work from Supranational, with special thanks to Niall Emmart:
+//
+// We would like to acknowledge Niall Emmart at Nvidia for his significant
+// contribution of concepts and code for generating efficient SASS on
+// Nvidia GPUs. The following papers may be of interest:
+//     Optimizing Modular Multiplication for NVIDIA's Maxwell GPUs
+//     https://ieeexplore.ieee.org/document/7563271
+//
+//     Faster modular exponentiation using double precision floating point
+//     arithmetic on the GPU
+//     https://ieeexplore.ieee.org/document/8464792
+
 typedef uint uint32_t;
 typedef int  int32_t;
 typedef uint limb;
