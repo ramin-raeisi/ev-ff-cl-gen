@@ -31,7 +31,7 @@ __kernel void test_double_32(Fr32 a, __global Fr32 *result) {
 }
 
 ////////////
-
+/*
 __kernel void test_add_64(Fr64 a, Fr64 b, __global Fr64 *result) {
   *result = Fr64_add(a, b);
 }
@@ -63,3 +63,4 @@ __kernel void test_sqr_64(Fr64 a, __global Fr64 *result) {
 __kernel void test_double_64(Fr64 a, __global Fr64 *result) {
   *result = Fr64_double(a);
 }
+*/

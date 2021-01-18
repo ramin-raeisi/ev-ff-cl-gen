@@ -208,10 +208,10 @@ mod tests {
         static ref PROQUE: ProQue = {
             static TEST_SRC: &str = include_str!("cl/test.cl");
             let src = format!(
-                "{}\n{}\n{}\n{}",
+                "{}\n{}\n{}",
                 shared(),
                 field::<Fr, Limb32>("Fr32"),
-                field::<Fr, Limb64>("Fr64"),
+                // field::<Fr, Limb64>("Fr64"),
                 TEST_SRC
             );
             println!("{}", src);
@@ -248,7 +248,7 @@ mod tests {
             let mut c = a.clone();
             c.add_assign(&b);
             assert_eq!(call_kernel!("test_add_32", GpuFr(a), GpuFr(b)), c);
-            assert_eq!(call_kernel!("test_add_64", GpuFr(a), GpuFr(b)), c);
+            // assert_eq!(call_kernel!("test_add_64", GpuFr(a), GpuFr(b)), c);
         }
     }
 
@@ -261,7 +261,7 @@ mod tests {
             let mut c = a.clone();
             c.sub_assign(&b);
             assert_eq!(call_kernel!("test_sub_32", GpuFr(a), GpuFr(b)), c);
-            assert_eq!(call_kernel!("test_sub_64", GpuFr(a), GpuFr(b)), c);
+            // assert_eq!(call_kernel!("test_sub_64", GpuFr(a), GpuFr(b)), c);
         }
     }
 
@@ -274,7 +274,7 @@ mod tests {
             let mut c = a.clone();
             c.mul_assign(&b);
             assert_eq!(call_kernel!("test_mul_32", GpuFr(a), GpuFr(b)), c);
-            assert_eq!(call_kernel!("test_mul_64", GpuFr(a), GpuFr(b)), c);
+            // assert_eq!(call_kernel!("test_mul_64", GpuFr(a), GpuFr(b)), c);
         }
     }
 
@@ -286,7 +286,7 @@ mod tests {
             let b = rng.gen::<u32>();
             let c = a.pow([b as u64]);
             assert_eq!(call_kernel!("test_pow_32", GpuFr(a), b), c);
-            assert_eq!(call_kernel!("test_pow_64", GpuFr(a), b), c);
+            // assert_eq!(call_kernel!("test_pow_64", GpuFr(a), b), c);
         }
     }
 
@@ -298,7 +298,7 @@ mod tests {
             let mut b = a.clone();
             b.square();
             assert_eq!(call_kernel!("test_sqr_32", GpuFr(a)), b);
-            assert_eq!(call_kernel!("test_sqr_64", GpuFr(a)), b);
+            // assert_eq!(call_kernel!("test_sqr_64", GpuFr(a)), b);
         }
     }
 
@@ -310,7 +310,7 @@ mod tests {
             let mut b = a.clone();
             b.double();
             assert_eq!(call_kernel!("test_double_32", GpuFr(a)), b);
-            assert_eq!(call_kernel!("test_double_64", GpuFr(a)), b);
+            // assert_eq!(call_kernel!("test_double_64", GpuFr(a)), b);
         }
     }
 
@@ -321,7 +321,7 @@ mod tests {
             let a = Fr::random(&mut rng);
             let b = unsafe { std::mem::transmute::<FrRepr, Fr>(a.into_repr()) };
             assert_eq!(call_kernel!("test_unmont_32", GpuFr(a)), b);
-            assert_eq!(call_kernel!("test_unmont_64", GpuFr(a)), b);
+            // assert_eq!(call_kernel!("test_unmont_64", GpuFr(a)), b);
         }
     }
 
@@ -333,7 +333,7 @@ mod tests {
             let a = unsafe { std::mem::transmute::<FrRepr, Fr>(a_repr) };
             let b = Fr::from_repr(a_repr).unwrap();
             assert_eq!(call_kernel!("test_mont_32", GpuFr(a)), b);
-            assert_eq!(call_kernel!("test_mont_64", GpuFr(a)), b);
+            // assert_eq!(call_kernel!("test_mont_64", GpuFr(a)), b);
         }
     }
 }
