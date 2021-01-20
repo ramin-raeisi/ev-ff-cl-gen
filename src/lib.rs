@@ -171,6 +171,7 @@ where
             COMMON_SRC.to_string(),
             params::<F, L>(),
             nvidia::field_add_sub_nvidia::<F, L>(),
+            NVIDIA_SRC.to_string(),
             String::from(FIELD_SRC),
         ],
         "\n",
